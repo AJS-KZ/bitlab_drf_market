@@ -8,6 +8,7 @@ from products.models import Phone
 from products.serializers import PhoneAllSerializer, PhoneListSerializer, PhoneRetrieveSerializer, PhoneCreateSerializer
 from products.permissions import IsAdminOrReadOnly
 from products.filters import PhoneFilterSet
+from products.tasks import adding_task
 
 
 class PhoneViewSet(viewsets.GenericViewSet,
@@ -18,18 +19,18 @@ class PhoneViewSet(viewsets.GenericViewSet,
                    mixins.DestroyModelMixin):
     queryset = Phone.objects.all()
     serializer_class = PhoneAllSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     filter_backends = (filters.DjangoFilterBackend, )
     filterset_class = PhoneFilterSet
 
-    def get_permissions(self):
-        permission_classes = self.permission_classes
-
-        if self.action == 'update' or self.action == 'partial_update' or self.action == 'destroy':
-            permission_classes.append(IsAdminOrReadOnly)
-
-        return [permission() for permission in permission_classes]
+    # def get_permissions(self):
+    #     permission_classes = self.permission_classes
+    #
+    #     if self.action == 'update' or self.action == 'partial_update' or self.action == 'destroy':
+    #         permission_classes.append(IsAdminOrReadOnly)
+    #
+    #     return [permission() for permission in permission_classes]
 
     def get_serializer_class(self):
         serializer_class = self.serializer_class
@@ -43,11 +44,26 @@ class PhoneViewSet(viewsets.GenericViewSet,
 
         return serializer_class
 
+    def list(self, request, *args, **kwargs):
+        # FOR CELERY CHECKING
+        adding_task.delay(56, 55)
+
+        queryset = self.filter_queryset(self.get_queryset())
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
     def create(self, request, *args, **kwargs):  # POST
         serializer = self.get_serializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        return Response(data={}, status=status.HTTP_201_CREATED)
+
+        return Response(data=serializer.data, status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):  # PUT
         partial = kwargs.pop('partial', False)
