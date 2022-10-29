@@ -1,11 +1,18 @@
 from rest_framework import viewsets, mixins, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.decorators import action
 
 from django_filters import rest_framework as filters
 
-from products.models import Phone
-from products.serializers import PhoneAllSerializer, PhoneListSerializer, PhoneRetrieveSerializer, PhoneCreateSerializer
+from products.models import Phone, Memory
+from products.serializers import (
+    PhoneAllSerializer,
+    PhoneListSerializer,
+    PhoneRetrieveSerializer,
+    PhoneCreateSerializer,
+    MemoryAllFieldsSerializer,
+)
 from products.permissions import IsAdminOrReadOnly
 from products.filters import PhoneFilterSet
 from products.tasks import adding_task
@@ -61,9 +68,9 @@ class PhoneViewSet(viewsets.GenericViewSet,
     def create(self, request, *args, **kwargs):  # POST
         serializer = self.get_serializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
-        serializer.save()
+        instance = serializer.save()
 
-        return Response(data=serializer.data, status=status.HTTP_201_CREATED)
+        return Response(data=PhoneListSerializer(instance).data, status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):  # PUT
         partial = kwargs.pop('partial', False)
@@ -78,3 +85,19 @@ class PhoneViewSet(viewsets.GenericViewSet,
             instance._prefetched_objects_cache = {}
 
         return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='get_all_memories')
+    def get_all_memories(self, request, *args, **kwargs):
+        queryset = Memory.objects.all()
+        serializer = MemoryAllFieldsSerializer(queryset, many=True)
+        return Response(data=serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'], url_path='get_one_memory')
+    def get_one_memory(self, request, *args, **kwargs):
+        pk = kwargs.get('pk')
+        instance = Memory.objects.filter(uuid=pk).first()
+        if instance is not None:
+            serializer = MemoryAllFieldsSerializer(instance).data
+        else:
+            serializer = {'ERROR': 'Memory by  given uuid not found!'}
+        return Response(data=serializer, status=status.HTTP_200_OK)
