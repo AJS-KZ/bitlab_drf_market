@@ -1,0 +1,31 @@
+version: "3"
+
+services:
+  redis:
+    image: redis:latest
+    container_name: redis
+    hostname: redis
+    ports:
+      - '6379:6379'
+
+  backend:
+    container_name: backend
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    volumes:
+      - ./dockerexample:/var/www/bitlab_drf_market
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+      - celery
+
+  celery:
+    build: ./app
+    container_name: celery
+    command: celery -A project worker --loglevel=info
+    volumes:
+      - ./dockerexample:/var/www/bitlab_drf_market
+    depends_on:
+      - redis
